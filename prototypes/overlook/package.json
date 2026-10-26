@@ -1,0 +1,12 @@
+{
+  "name": "bug-bistro-overlook-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5178 --strictPort",
+    "desktop": "node ../../node_modules/electron/cli.js electron.cjs",
+    "check": "node check.cjs"
+  },
+  "dependencies": { "three": "0.180.0" }
+}

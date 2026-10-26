@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bug 小餐馆 · 全屏视角选型 Demo</title><link rel="stylesheet" href="./style.css"></head>
+<body>
+<header class="header"><a class="brand" href="#" aria-label="Bug 小餐馆首页"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none"><path d="M9 6v7m4-7v7M6 6v7c0 4 10 4 10 0V6M11 17v10M24 6c-6 5-7 11 0 11V6Zm0 11v10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>Bug 小餐馆<small>一点进展，一点烟火气。</small></span></a><nav><span class="demo-tag">视觉探索 / 03</span><button id="settings" class="icon-button" aria-label="显示设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="currentColor"/><circle cx="15" cy="17" r="3" fill="currentColor"/></svg></button><button id="fullscreen" class="icon-button" aria-label="全屏看店"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m6 0h5v-5"/></svg></button></nav></header>
+<main>
+<section class="world" aria-label="16:9 餐馆街区视角选型演示">
+<div class="world-top"><span class="world-brand">Bug 小餐馆 <small>16:9 电脑 · 视觉原型</small></span><div class="opening"><span class="live-dot"></span><b id="opening">小店营业中</b><span class="divider"></span><span>模拟数据 · 未连接项目</span></div><span class="view-tag" id="view-tag">摆正视角 · 保留立面</span><div class="world-actions"><button id="scene-settings">设置</button><button id="scene-fullscreen">全屏看店</button><button id="preview" aria-pressed="false">桌面预览</button></div></div>
+<div class="stats" aria-label="Bug 状态统计">
+<button class="stat todo" data-filter="todo"><span class="stat-icon">≡</span><span><b>等待备料</b><small>新建 Bug</small></span><strong id="count-todo">0</strong></button>
+<button class="stat cooking" data-filter="cooking"><span class="stat-icon">♨</span><span><b>正在烹饪</b><small>处理中</small></span><strong id="count-cooking">0</strong></button>
+<button class="stat ready" data-filter="ready"><span class="stat-icon">⌑</span><span><b>等待上菜</b><small>已修复 · 待关闭</small></span><strong id="count-ready">0</strong></button>
+<button class="stat closed" data-filter="closed"><span class="stat-icon">✓</span><span><b>本轮已上桌</b><small>模拟今日关闭</small></span><strong id="count-closed">0</strong></button>
+</div>
+<div id="stage"><canvas id="scene" aria-label="可点击备菜区、灶台、出餐台与餐桌，查看对应 Bug" role="img"></canvas><div id="labels"></div><div id="fallback" hidden><h2>当前设备无法创建 3D 场景</h2><p>请使用启动脚本打开桌面 Demo，或开启浏览器硬件加速。</p></div></div>
+<div class="scene-caption"><span class="tiny-star">✳</span><span>没有倒计时，也不用亲自下厨。<br><b>你推进 Bug，小店照常营业。</b></span></div>
+<div class="camera-tools" role="group" aria-label="视角选型"><span>视角选型</span><button data-view="angled" aria-pressed="false">斜摆视角</button><button data-view="front" aria-pressed="true">摆正视角</button><button id="camera" aria-label="切换观察角度">↻</button><button id="home" aria-label="恢复默认视角">⌂</button></div><button id="exit-preview" hidden>退出桌面预览 · Esc</button>
+<div class="control-dock"><button class="primary" id="add"><span>＋</span> 模拟新 Bug</button><span class="dock-separator"></span><button id="pause">Ⅱ 暂停</button><button id="auto" aria-pressed="true">自动来单 <i></i></button><button id="speed">1× 速度</button><button id="reset" title="重新演示">↺ 重置</button></div>
+<div class="help">点击菜品、灶台或餐桌，看看正在发生的事</div>
+</section>
+<section class="activity"><div class="activity-title"><span class="live-dot"></span>营业手记</div><div id="log" aria-live="polite"></div><span id="clock">00:00</span></section>
+<footer><span>BUG BISTRO <i> / </i> A LITTLE PROGRESS, A LITTLE WARMTH.</span><span>玩法遵循设计文档 · 原创场景与角色 · 仅 Mock 演示</span></footer>
+</main>
+<div id="veil" class="veil" hidden><aside role="dialog" aria-modal="true" aria-labelledby="panel-title" class="panel"><div class="panel-top"><span class="eyebrow">餐馆里的工作进展</span><button id="close" class="icon-button" aria-label="关闭面板">×</button></div><h2 id="panel-title">等待备料</h2><p class="panel-hint">这是演示数据，不会修改任何真实项目。</p><div id="orders"></div></aside></div>
+<div class="settings" id="settings-panel" hidden><h3>小店设置</h3><label><input id="animate" type="checkbox" checked> 角色动画与特效</label><label><input id="show-stats" type="checkbox" checked> 显示状态统计</label><label><input id="show-exterior" type="checkbox" checked> 道路、邻楼与绿化</label><p>仅 16:9 电脑，整体等比缩放。<br>桌面预览隐藏演示 UI，不挂载系统桌面。<br>真实数据接入及壁纸挂载不在本版内。</p></div>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script><script src="./model.js"></script><script type="module" src="./main.js"></script>
+</body></html>
