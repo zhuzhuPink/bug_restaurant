@@ -11,7 +11,13 @@ const { spawn } = require('node:child_process');
 const server = spawn(process.execPath, [path.join(__dirname, '../../node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', '5183', '--strictPort'], { cwd: __dirname, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
 process.on('exit', () => server.kill());
 (async () => {
+  require('./walking-check.cjs').checkWalking();
+  pass('人物连续行走、避让与椅侧进出九组专项回归');
+  await require('./environment-check.cjs').checkEnvironment();
+  require('./street-check.cjs').checkStreet();
+  pass('门口、长椅、道路几何与人车红绿灯专项回归');
   checkModel();
+  await checkTraffic();
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('本地验收服务启动超时')), 15000);
     server.stdout.on('data', chunk => { if (chunk.toString().includes('Local:')) { clearTimeout(timer); resolve(); } });
@@ -35,8 +41,8 @@ process.on('exit', () => server.kill());
     assert.equal(await page.evaluate(() => demo.snapshot().time), time);
     pass('暂停冻结模拟时间与角色动画');
     let state = await page.evaluate(() => demo.snapshot());
-    assert.equal(Object.values(state.counts).reduce((a, b) => a + b, 0), state.orders.length);
-    pass('四类计数总和等于全部模拟订单');
+    assert.equal(state.counts.todo + state.counts.cooking + state.counts.closed, state.orders.length);
+    pass('业务状态总数与全部订单一致，待上餐是独立展示子集');
     await page.locator('#add').click();
     assert.equal((await page.evaluate(() => demo.snapshot().orders.length)), state.orders.length + 1);
     pass('新增模拟 Bug');
@@ -92,15 +98,17 @@ process.on('exit', () => server.kill());
       assert.equal(await page.locator('#veil').isVisible(), false);
     }
     pass('全部统计卡、详情列表计数与 Escape 关闭一致');
+    // 独立验证家具射线命中，避免上一段上菜气泡或人物遮住桌面测试点。
+    await page.evaluate(() => { demo.reset(); demo.pause(); demo.advance(7); });
     for (const [point, title] of [
-      [[-6.2, 1.28, -1.75], '1 号桌'], [[-6.2, 1.28, 3.65], '2 号桌'], [[-1.6, 1.28, 3.65], '3 号桌'], [[-1.6, 1.28, -1.75], '4 号桌'],
+      [[-6.1, 1.28, -1.45], '1 号桌'], [[-6.1, 1.28, 3.95], '2 号桌'], [[-1.5, 1.28, 3.95], '3 号桌'], [[-1.5, 1.28, -1.45], '4 号桌'],
       [[3, 1.29, .7], '等待上菜'], [[6.62, 2.1, -5.3], '等待备料'], [[6.8, 1.72, .25], '正在烹饪']
     ]) {
       const position = await page.evaluate(xyz => demo.point(...xyz), point);
       await page.mouse.click(position.x, position.y);
       await page.waitForFunction(() => !document.querySelector('#veil').hidden);
       assert.equal(await page.locator('#veil').isVisible(), true, title + ' 应当可点击');
-      assert.ok((await page.locator('#panel-title').textContent()).includes(title));
+      assert.ok((await page.locator('#panel-title').textContent()).includes(title), title + ' 实际打开：' + await page.locator('#panel-title').textContent());
       await page.keyboard.press('Escape');
     }
     pass('四张餐桌、备菜区、出餐台、灶台的 3D 射线点击');
@@ -137,9 +145,9 @@ process.on('exit', () => server.kill());
           });
           assert.equal(await page.locator('#veil').isVisible(), true, `${variant}/${key}/${target}`);
           assert.equal(await page.locator('#panel-title').textContent(), title);
-          const expected = await page.evaluate(key => demo.snapshot().orders.filter(o => o.status === key).map(o => o.id), key);
+          const expected = await page.evaluate(key => demo.snapshot().orders.filter(o => key === 'ready' ? ['waiting', 'serving'].includes(o.delivery) : o.status === key).map(o => o.id), key);
           assert.deepEqual(await page.locator('.order > small:first-child').allTextContents(), expected);
-          assert.ok((await page.locator('.order .status').allTextContents()).every(status => status === title));
+          assert.ok((await page.locator('.order .status').allTextContents()).every(status => key === 'ready' ? status.includes('等待上餐展示') : status.startsWith(title)));
           await page.keyboard.press('Escape');
         }
       }
@@ -168,13 +176,14 @@ process.on('exit', () => server.kill());
     state = await page.evaluate(() => demo.snapshot());
     assert.equal(state.speed, 1); assert.equal(state.auto, true);
     pass('倍速、自动来单与重置');
+    await checkNewVisuals(page);
     await page.locator('#auto').click();
-    await page.evaluate(() => demo.advance(100));
+    await page.evaluate(() => demo.advance(180));
     state = await page.evaluate(() => demo.snapshot());
     assert.equal(state.counts.closed, state.orders.length);
     assert.equal(state.counts.todo + state.counts.cooking + state.counts.ready, 0);
     assert.equal(await page.evaluate(() => demo.inspect().flames.visible), false);
-    pass('新建→烹饪→待上菜→本轮已关闭的完整 Mock 闭环');
+    pass('业务完成与上餐展示独立推进，顾客离店与双服务员完整闭环');
     await page.locator('#reset').click(); await page.evaluate(() => demo.pause());
     for (const [variant, index] of [['front', 1], ['angled', 0]]) {
       await page.locator(`[data-view="${variant}"]`).click(); await page.waitForTimeout(300);
@@ -196,8 +205,8 @@ process.on('exit', () => server.kill());
     await page.evaluate(() => demo.pause());
     await page.locator('[data-view=angled]').click();
     await page.locator('#home').click();
-    assert.equal(await page.evaluate(() => demo.info().camera), 1);
-    pass('摆正视角保留俯角与立面、斜摆切换、键盘、URL 持续及归位');
+    assert.equal(await page.evaluate(() => demo.info().camera), 0);
+    pass('摆正视角保留俯角与立面、双视角切换、键盘、URL 持续及斜视角归位');
     await page.locator('#scene-settings').click();
     await page.locator('#show-exterior').uncheck();
     assert.equal(await page.evaluate(() => demo.info().exterior), false);
@@ -257,17 +266,18 @@ process.on('exit', () => server.kill());
 
 function checkModel() {
   const sandbox = {};
-  require('node:vm').runInNewContext(fs.readFileSync(path.join(__dirname, 'model.js'), 'utf8'), sandbox);
+  const vm = require('node:vm'); vm.createContext(sandbox);
+  for (const file of ['layout.js', 'street.js', 'walking.js', 'model.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, file), 'utf8'), sandbox);
   const Model = sandbox.BistroModel;
   const single = new Model({ seed: false }); single.auto = false; single.addOrder();
   single.tick(1.1);
   assert.equal(single.snapshot().runner.phase, 'travel');
   assert.equal(single.snapshot().orders[0].status, 'todo');
   assert.equal(single.snapshot().chef.orderId, null);
-  single.tick(4.4);
+  for (let i = 0; i < 400 && single.runner.phase !== 'putdown'; i++) single.tick(.025);
   assert.equal(single.snapshot().runner.phase, 'putdown');
   assert.equal(single.snapshot().orders[0].status, 'todo');
-  single.tick(.1);
+  single.tick(.25);
   assert.equal(single.snapshot().runner.phase, 'return');
   assert.equal(single.snapshot().orders[0].status, 'cooking');
   assert.equal(single.snapshot().chef.orderId, single.orders[0].id);
@@ -289,4 +299,146 @@ function checkModel() {
   assert.equal(JSON.stringify(split.orders.map(order => [order.status, order.seat, Math.round(order.closedAt * 1000)])), JSON.stringify(batch.orders.map(order => [order.status, order.seat, Math.round(order.closedAt * 1000)])));
   batch.reset(); assert.equal(batch.seats.length, 4); assert.equal(batch.runner.phase, 'idle');
   pass('四张桌子均能实际接餐，双服务员闭环及大步长与逐帧模拟一致');
+  const stress = new Model({ seed: false }); stress.auto = false; stress.setLimits({ waiting: 6 });
+  for (let i = 0; i < 100; i++) stress.addOrder('压力测试 ' + i);
+  let maxGuests = 0, maxQueue = 0; const sides = new Set(), phases = new Set();
+  for (let i = 0; i < 6000; i++) {
+    stress.tick(.1); const s = stress.snapshot();
+    maxGuests = Math.max(maxGuests, s.guests.length);
+    maxQueue = Math.max(maxQueue, s.guests.filter(g => g.phase === 'queued').length);
+    const occupied = s.seats.filter(s => s.guestId !== null);
+    assert.equal(new Set(occupied.map(s => s.guestId)).size, occupied.length);
+    for (const g of s.guests) { phases.add(g.phase); if (g.table !== null) sides.add(g.side); if (['arriving', 'queued', 'entering', 'sitting', 'waiting'].includes(g.phase)) assert.equal(g.orderId, null); }
+    if (i === 1200) stress.setLimits({ waiting: 0 });
+  }
+  assert.ok(maxGuests <= 10); assert.ok(maxQueue <= 6); assert.ok(stress.guests.length <= 4);
+  assert.equal(sides.size, 2);
+  for (const phase of ['arriving','entering','sitting','waiting','eat','standing','leavingSeat','leaving']) assert.ok(phases.has(phase), phase);
+  assert.ok(stress.mergedArrivals > 0);
+  pass('百单压力下顾客总量受限、无拼桌、随机方向、完整进出与调低候位自然收敛');
+  const independent = new Model({ seed: false }); independent.auto = false;
+  independent.setLimits({ waiting: 0 });
+  const a = independent.addOrder('长期未完成 A'), b = independent.addOrder('后来先完成 B');
+  // Simulate an external completion arriving out of order, without starting the Mock cook.
+  b.status = 'closed'; b.closedAt = 0; b.delivery = 'waiting';
+  independent.runner.phase = 'waiting'; independent.runner.orderId = a.id;
+  independent.chef = { orderId: a.id, elapsed: -1000 };
+  independent.tick(40);
+  assert.equal(a.status, 'todo'); assert.equal(b.delivery, 'done'); assert.ok(b.servedAt !== null);
+  assert.equal(b.closedAt, 0);
+  pass('先来未完成 Bug 不锁桌，后完成餐点可以先上，完成时间不等待展示');
+  const full = new Model({ seed: false }); full.auto = false;
+  for (let i = 0; i < 8; i++) full.addOrder();
+  full.tick(130);
+  assert.equal(full.orders.filter(o => o.status === 'closed').length, 8);
+  assert.ok(full.orders.every(o => o.closedAt <= o.servedAt));
+  full.paused = true; const before = JSON.stringify(full.snapshot()); full.tick(60); assert.equal(JSON.stringify(full.snapshot()), before);
+  full.reset(); assert.equal(full.limits.waiting, 3);
+  pass('Bug 完成与用餐展示分离，暂停冻结全部顾客，重置清理临时关联');
+
+}
+
+async function checkNewVisuals(page) {
+  await page.locator('[data-view=front]').click();
+  await page.locator('#scene-settings').click();
+  assert.equal(await page.locator('#vehicle-limit').getAttribute('max'), '10');
+  for (const [id, value, key] of [['waiting-limit', 6, 'waiting'], ['vehicle-limit', 10, 'vehicles'], ['waiting-limit', 0, 'waiting'], ['waiting-limit', 3, 'waiting']]) {
+    await page.locator('#' + id).fill(String(value));
+    assert.equal(await page.evaluate(key => demo.snapshot().limits[key], key), value);
+  }
+  await page.keyboard.press('Escape');
+  pass('设置界面候位 0～6 人、车辆 0～10 辆即时配置');
+  await page.evaluate(() => { for (let i = 0; i < 16; i++) demo.advance(.4); });
+  for (const variant of ['front', 'angled']) {
+    await page.locator(`[data-view=${variant}]`).click();
+    await page.evaluate(() => demo.advance(0));
+    const bubbles = await page.evaluate(() => ({ bubbles: demo.inspect().bubbles, orders: demo.snapshot().orders }));
+    assert.ok(bubbles.bubbles.length > 0);
+    for (const bubble of bubbles.bubbles) assert.equal(bubble.title, bubbles.orders.find(o => o.id === bubble.id).title);
+    const first = page.locator('.bug-bubble').first();
+    const compact = await first.evaluate(node => {
+      const span = node.querySelector('span'), original = span.textContent;
+      span.textContent = '这是一个用于检查长名称不会撑大气泡的很长的 Bug 标题';
+      const result = { width: node.offsetWidth, height: node.offsetHeight, ellipsis: getComputedStyle(span).textOverflow, clipped: span.scrollWidth > span.clientWidth, caption: getComputedStyle(node.querySelector('small')).display };
+      span.textContent = original;
+      return result;
+    });
+    assert.ok(compact.width <= 136 && compact.height <= 30);
+    assert.equal(compact.ellipsis, 'ellipsis'); assert.ok(compact.clipped); assert.equal(compact.caption, 'none');
+    const title = await first.locator('span').textContent();
+    await first.click();
+    assert.equal(await page.locator('.order').count(), 1);
+    assert.equal(await page.locator('.order b').textContent(), title);
+    await page.keyboard.press('Escape');
+    await page.screenshot({ path: path.join(output, `customers-${variant}.png`) });
+    results.screenshots.push(`customers-${variant}.png`);
+  }
+  pass('双视角紧凑单行气泡、长标题省略、准确关联 Bug 并点击打开独立明细');
+  await page.locator('#preview').click();
+  assert.ok(await page.locator('.bug-bubble').first().isVisible());
+  await page.keyboard.press('Escape');
+  pass('桌面预览保留人物餐点气泡');
+  const traffic = await page.evaluate(() => {
+    for (let i = 0; i < 30; i++) demo.advance(.4);
+    return demo.inspect().traffic;
+  });
+  assert.equal(traffic.active, 10); assert.equal(traffic.allocated, 10);
+  assert.ok(traffic.cars.some(c => c.lane === 0) && traffic.cars.some(c => c.lane === 1));
+  assert.ok(traffic.cars.some(c => c.road === 'horizontal') && traffic.cars.some(c => c.road === 'vertical'));
+  pass('横竖道路共用十辆总额度、双向行驶、车辆资源池有界');
+  await page.locator('#scene-settings').click();
+  await page.locator('#show-exterior').uncheck();
+  const frozen = await page.evaluate(() => { const before = demo.inspect().traffic; demo.advance(4); return { before, after: demo.inspect().traffic }; });
+  assert.deepEqual(frozen.after, frozen.before);
+  await page.locator('#show-exterior').check();
+  await page.locator('#animate').uncheck();
+  const stopped = await page.evaluate(() => { const before = demo.inspect().traffic; demo.advance(4); return { before, after: demo.inspect().traffic }; });
+  assert.deepEqual(stopped.after, stopped.before);
+  await page.locator('#animate').check();
+  await page.locator('#vehicle-limit').fill('0');
+  assert.equal(await page.evaluate(() => demo.inspect().traffic.active), 10, '调低不能强删车辆');
+  await page.keyboard.press('Escape');
+  // 模型内部仍按固定步推进；这里只绘制最终帧，避免软件 WebGL 堆积 200 次绘制而饿死动画回调。
+  const drained = await page.evaluate(() => { demo.advance(80); return demo.inspect().traffic; });
+  assert.equal(drained.active, 0); assert.equal(drained.allocated, 10);
+  pass('车辆隐藏/动画关闭冻结，调低上限自然退场，设为零停止补充');
+  await page.locator('#reset').click(); await page.evaluate(() => { demo.pause(); demo.configure({ vehicles: 2 }); });
+}
+
+
+async function checkTraffic() {
+  await import('./street.js');
+  const traffic = new globalThis.BistroStreet.Junction();
+  let maximum = 0, stopped = false;
+  const crossed = new Set(), previous = new Map();
+  for (let i = 0; i < 6000; i++) {
+    traffic.tick(.05, 10);
+    const current = traffic.snapshot(); maximum = Math.max(maximum, current.active);
+    assert.ok(current.active <= 10 && current.allocated <= 10);
+    for (const car of traffic.cars.filter(c => c.active)) {
+      if (previous.has(car) && previous.get(car).lane === car.lane && previous.get(car).progress <= car.progress) {
+        if (Math.abs(previous.get(car).progress - car.progress) < 1e-6) stopped = true;
+        const centers = [14, 39, 42, 17];
+        if (previous.get(car).progress < centers[car.lane] && car.progress >= centers[car.lane]) crossed.add(car.lane);
+      }
+      previous.set(car, { lane: car.lane, progress: car.progress });
+    }
+    for (let a = 0; a < current.cars.length; a++) for (let b = a + 1; b < current.cars.length; b++) {
+      const left = current.cars[a], right = current.cars[b];
+      const half = car => car.road === 'horizontal' ? [.85, .5] : [.5, .85];
+      const la = half(left), rb = half(right);
+      assert.ok(Math.abs(left.position[0] - right.position[0]) >= la[0] + rb[0] + .1 || Math.abs(left.position[2] - right.position[2]) >= la[1] + rb[1] + .1, '横竖路口及同车道车身不得重叠');
+      if (left.lane === right.lane) assert.ok(Math.hypot(left.position[0] - right.position[0], left.position[2] - right.position[2]) >= 3.1 - 1e-6, '同车道保持安全车距');
+    }
+  }
+  assert.equal(maximum, 10); assert.equal(crossed.size, 4); assert.ok(stopped, '红灯时应有车辆等候');
+  const before = traffic.snapshot(); traffic.enabled = false; traffic.tick(100, 10); assert.deepEqual(traffic.snapshot(), before);
+  traffic.enabled = true;
+  for (let i = 0; i < 1500; i++) traffic.tick(.1, 0);
+  assert.equal(traffic.snapshot().active, 0); assert.equal(traffic.snapshot().allocated, 10);
+  const defaults = new globalThis.BistroStreet.Junction();
+  for (let i = 0; i < 25; i++) defaults.tick(.1, 2);
+  assert.equal(defaults.snapshot().active, 2);
+  assert.equal(new Set(defaults.snapshot().cars.map(car => car.road)).size, 2);
+  pass('横竖四车道五分钟逐帧无碰撞、红绿灯让行、共用额度及默认两路来车');
 }

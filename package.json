@@ -1,0 +1,83 @@
+{
+  "name": "bug-bistro",
+  "version": "1.2.7",
+  "private": true,
+  "description": "将 Bug 看板变成暖心小餐馆的 Windows 桌面应用",
+  "author": "Bug Bistro",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "desktop": "electron .",
+    "build": "vue-tsc --noEmit && vite build && node scripts/build-bistro.cjs",
+    "test": "vitest run",
+    "pack": "npm run build && electron-builder --win dir nsis portable --x64 && node scripts/release-update.cjs",
+    "smoke": "node scripts/smoke.cjs",
+    "import:scene": "node scripts/import-scene.cjs",
+    "update:manifest": "node scripts/release-update.cjs"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "sharp": "^0.35.5",
+    "three": "0.180.0",
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.10",
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3",
+    "playwright": "1.64.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "vue-tsc": "3.3.13"
+  },
+  "build": {
+    "appId": "local.bugbistro.desktop",
+    "productName": "Bug小餐馆",
+    "directories": {
+      "output": "release/${version}"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "build/icon.png",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        "dir",
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "signExecutable": false
+    },
+    "portable": {
+      "artifactName": "BugBistro-${version}-Windows-x64.exe"
+    },
+    "asarUnpack": [
+      "electron/*.ps1"
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "nsis": {
+      "artifactName": "BugBistro-${version}-Setup-x64.exe",
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "shortcutName": "Bug小餐馆",
+      "installerLanguages": [
+        "zh_CN"
+      ],
+      "language": "2052"
+    },
+    "electronLanguages": [
+      "zh-CN"
+    ]
+  },
+  "type": "module",
+  "versionCode": 1002007,
+  "releaseNotes": "精简安装包，程序和安装界面仅保留简体中文；更新下载超时从5分钟延长到30分钟，版本检查仍为10秒；保留现有场景、桌面背景、看板及手动更新功能。"
+}

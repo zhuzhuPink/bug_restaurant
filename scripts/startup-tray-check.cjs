@@ -1,0 +1,61 @@
+const assert=require('node:assert/strict');
+const path=require('node:path'),fs=require('node:fs/promises');
+const {_electron}=require('playwright');
+(async()=>{
+ const env={...process.env,BISTRO_DATA_DIR:path.resolve('.electron-test/startup-tray')};delete env.ELECTRON_RUN_AS_NODE;delete env.BISTRO_START_NORMAL;
+ await fs.mkdir(env.BISTRO_DATA_DIR,{recursive:true});
+ await fs.writeFile(path.join(env.BISTRO_DATA_DIR,'scene.json'),JSON.stringify({waiting:3,vehicles:2,interactive:true}));
+ const args=['--enable-unsafe-swiftshader','--use-angle=swiftshader'];if(!process.env.BISTRO_EXE)args.push('.');
+ const app=await _electron.launch({...(process.env.BISTRO_EXE?{executablePath:process.env.BISTRO_EXE}:{}),args,cwd:process.cwd(),env,timeout:45000});
+ const page=await app.firstWindow();const errors=[],checks=[];let settings,previousLogin;
+ page.on('pageerror',e=>errors.push(e.message));
+ try{
+  await page.waitForFunction(()=>window.bistro&&window.demo?.info().renderer.calls>0);
+  await page.waitForFunction(async()=>(await bistro.appStatus()).mode==='desktop',null,{timeout:60000});
+  await page.waitForFunction(()=>document.body.classList.contains('desktop-mode'));
+  assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().length),1);
+  assert.equal(await page.locator('#scene-settings').isVisible(),false);
+  assert.equal(await page.locator('#exit-preview').isVisible(),false);
+  checks.push('默认真实桌面模式，无设置窗口、无背景设置浮层');
+  const event=app.waitForEvent('window');await page.evaluate(()=>bistro.openSettings());settings=await event;
+  settings.on('pageerror',e=>errors.push(e.message));await settings.waitForFunction(()=>!document.querySelector('#vehicles').disabled);
+  assert.ok(settings.url().endsWith('/bistro/settings.html'));
+  assert.equal((await page.evaluate(()=>bistro.appStatus())).mode,'desktop');
+  await settings.locator('#vehicles').fill('10');await settings.locator('#vehicles').dispatchEvent('change');
+  await page.waitForFunction(()=>demo.snapshot().limits.vehicles===10);
+  await settings.locator('#waiting').fill('5');await settings.locator('#waiting').dispatchEvent('change');
+  await page.waitForFunction(()=>demo.snapshot().limits.waiting===5);
+  await settings.locator('#view').selectOption('angled');await page.waitForFunction(()=>demo.info().camera===0);
+  await Promise.all([page.evaluate(()=>bistro.saveSceneSettings({stats:false})),settings.evaluate(()=>bistro.saveSceneSettings({auto:false}))]);
+  const saved=await page.evaluate(()=>bistro.sceneSettings());assert.equal(saved.stats,false);assert.equal(saved.auto,false);
+  await settings.waitForFunction(()=>!document.querySelector('#stats').checked&&!document.querySelector('#auto').checked);
+  assert.equal((await settings.evaluate(()=>bistro.appStatus())).mode,'desktop');
+  checks.push('独立设置与背景共存，候位/车辆/视角实时应用，多窗口保存不互相覆盖');
+  const login=await settings.evaluate(()=>bistro.loginSettings());
+  if(process.env.BISTRO_TEST_LOGIN==='1'){
+   assert.equal(login.supported,true);assert.equal(login.enabled,false,'存在同路径启动项时不执行写入测试，避免影响用户配置');
+   await app.evaluate(({app})=>app.setAppUserModelId('local.bugbistro.startup.qa.'+Date.now()));previousLogin=false;
+   await settings.locator('#login').setChecked(!previousLogin);
+   await settings.waitForFunction(value=>document.querySelector('#login').checked===value&&!document.querySelector('#login').disabled,!previousLogin);
+   assert.equal((await settings.evaluate(()=>bistro.loginSettings())).enabled,!previousLogin);
+   await settings.locator('#login').setChecked(previousLogin);
+   await settings.waitForFunction(value=>document.querySelector('#login').checked===value&&!document.querySelector('#login').disabled,previousLogin);
+   assert.equal((await settings.evaluate(()=>bistro.loginSettings())).enabled,previousLogin);
+   checks.push('正式包真实Windows启动项开关读写，已清理临时验收启动项');
+  }else checks.push(login.supported?'正式包自启动状态可读取（未改系统启动项）':'开发模式自启动禁用且有说明');
+  assert.equal(await settings.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth),false);
+  await settings.screenshot({path:path.resolve('prototypes/overlook/qa/settings-window.png')});
+  const time=await page.evaluate(()=>demo.snapshot().time);
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/settings.html')).close());
+  assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('/settings.html')).isVisible()),false);
+  await page.waitForTimeout(1000);assert.ok(await page.evaluate(t=>demo.snapshot().time>t,time));
+  assert.equal((await page.evaluate(()=>bistro.appStatus())).mode,'desktop');
+  await page.evaluate(()=>bistro.openSettings());assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().length),2);
+  checks.push('关闭设置仅隐藏，小店持续运行，再次打开复用原窗口');
+  await fs.writeFile(path.resolve('prototypes/overlook/qa/startup-tray-result.json'),JSON.stringify({date:new Date().toISOString(),checks,errors,login,physicalInput:false},null,2));
+  assert.deepEqual(errors,[]);console.log('启动托盘验收通过：'+checks.join('；'));
+ }finally{
+  if(previousLogin!==undefined&&settings)await settings.evaluate(enabled=>bistro.setLogin(enabled),previousLogin).catch(()=>{});
+  try{await page.evaluate(()=>bistro.windowAction('restore'))}catch{}await app.close();
+ }
+})().catch(e=>{console.error('启动托盘验收失败：',e);process.exitCode=1});

@@ -1,12 +1,15 @@
 import * as THREE from 'three';
+import { Traffic } from './traffic.js';
+import { cameraFrame } from './viewport.js';
 import { RoundedBoxGeometry } from './node_modules/three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const P = { cream: '#f5ebcf', ivory: '#fff6e1', wood: '#bd8953', edge: '#93613f', mint: '#76a699', teal: '#426e65', coral: '#db856c', dark: '#384940', metal: '#bac9be' };
 const ROOM = { width: 19.1, depth: 14.5 };
-const TABLES = [[-6.2, -2], [-6.2, 3.4], [-1.6, 3.4], [-1.6, -2]];
+const L = globalThis.BistroLayout;
+const TABLES = L.tables;
 const PICKUP = [1.65, -.05];
-const ROUTES = TABLES.map(([x, z]) => [PICKUP, [1.65, .25], [x + 1.6, .25], [x + 1.6, z]]);
-const SUPPLY_ROUTE = [[3.65, -4.75], [4.9, -4.75], [4.9, -3.25], [6.8, -3.25], [6.8, -2.5]];
+const ROUTES = TABLES.map((_, i) => L.delivery(i, 0));
+const SUPPLY_ROUTE = L.supply;
 
 export class Restaurant {
   constructor(canvas, labels) {
@@ -55,13 +58,13 @@ export class Restaurant {
     this.runner = this.character('runner', '#ce9763');
     this.runner.userData.filter = 'todo';
     this.runner.position.set(SUPPLY_ROUTE[0][0], .03, SUPPLY_ROUTE[0][1]);
-    this.guests = TABLES.map(([x, z], i) => {
-      const guest = this.character('guest', ['#d68d78', '#bba365', '#719aaa', '#c29982'][i], i);
-      guest.position.set(x, .21, z - 1.08);
-      guest.scale.setScalar(1.04);
-      guest.userData.filter = i;
-      return guest;
-    });
+    this.guestPool = [];
+    this.guestActors = new Map();
+    this.traffic = new Traffic(this);
+    this.bubbleNodes = new Map();
+    this.bubbleLayer = document.createElement('div');
+    this.bubbleLayer.id = 'bug-bubbles';
+    this.labels.parentElement.append(this.bubbleLayer);
     this.steam = Array.from({ length: 9 }, (_, i) => {
       const puff = this.sphere(.085 + (i % 3) * .02, '#fffaf0', 5.32, 1.65, -.25, this.scene);
       puff.material = new THREE.MeshBasicMaterial({ color: '#fffaf0', transparent: true, opacity: .45, depthWrite: false });
@@ -155,20 +158,7 @@ export class Restaurant {
     this.exterior = this.group();
     const outer = this.exterior;
     this.box(160, .18, 160, '#a7b992', 0, -.88, 0, outer);
-    // The world extends past every camera edge; only decorative scenery may be cropped.
-    this.box(90, .06, 4.6, '#839295', 0, -.75, 11, outer);
-    this.box(4.6, .06, 90, '#839295', -14, -.75, 0, outer);
-    this.box(90, .08, 1.5, '#d9ceb4', 0, -.65, 8.05, outer);
-    this.box(90, .08, 1.2, '#d9ceb4', 0, -.65, 13.95, outer);
-    this.box(1.5, .08, 90, '#d9ceb4', -11.05, -.65, 0, outer);
-    for (let x = -40; x <= 40; x += 3) {
-      if (x < -16.8 || x > -11.2) this.box(1.35, .012, .07, '#f5e8c5', x, -.709, 11, outer);
-      this.box(.025, .01, 1.2, '#c4b79d', x, -.6, 8.05, outer);
-    }
-    for (let z = -35; z <= 35; z += 3) {
-      if (z < 8.5 || z > 13.5) this.box(.07, .012, 1.35, '#f5e8c5', -14, -.709, z, outer);
-    }
-    for (let i = 0; i < 7; i++) this.box(.42, .018, 3.3, '#efe9ce', -8 + i * .73, -.705, 11, outer);
+    this.buildStreets();
     for (let x = -7; x <= 7; x += .8) this.box(.72, .05, .9, '#e7d6b4', x, -.59, 7.9, outer);
     const tree = (x, z, size = 1) => {
       const g = this.group(x, -.65, z, outer); g.scale.setScalar(size);
@@ -191,20 +181,100 @@ export class Restaurant {
     };
     house(-3, -11.2, 6, 3.7, '#dfc5a3');
     house(6, -11.5, 5, 3.8, '#c5c9a8');
-    house(-18.5, -.5, 5, 6, '#d3b6a1');
+    house(-21, -.5, 5, 6, '#d3b6a1');
     house(14, -8.5, 4.8, 4, '#c7c3a1');
     house(16, 4, 4.5, 5, '#d8c6a0');
+    // 额外街区只使用静态模型，避免随显示面积增加人物和车辆负载。
+    for (const [x, z, w, d] of [
+      [-24, -17, 6, 5], [-4, -20, 6, 5], [6, -21, 5, 5], [17, -18, 5, 5],
+      [-25, 20, 6, 5], [-5, 20, 6, 5], [6, 21, 5, 5], [18, 20, 5, 5],
+      [-29, -5, 5, 6], [-28, 6, 5, 5], [25, -7, 5, 6], [26, 6, 5, 5],
+      [-39, -17, 5, 6], [-39, 0, 5, 6], [-39, 20, 5, 6],
+      [39, -17, 5, 6], [39, 0, 5, 6], [39, 20, 5, 6],
+      [-24, -35, 6, 5], [-4, -35, 6, 5], [8, -35, 6, 5], [22, -35, 6, 5],
+      [-24, 36, 6, 5], [-4, 36, 6, 5], [8, 36, 6, 5], [22, 36, 6, 5]
+    ]) house(x, z, w, d, (x + z) % 2 ? '#d3c4a5' : '#c5c9a8');
+    for (const z of [-27, 28]) {
+      for (const [left, right] of [[-55, -17.8], [-10.2, 55]]) {
+        this.box(right - left, .08, 2.4, '#d9ceb4', (left + right) / 2, -.65, z, outer);
+      }
+    }
+    [[-24,-25],[-8,-16],[13,-25],[24,-23],[-24,27],[11,27],[24,15],[-32,15],[-33,-12],[33,-12],[33,14]].forEach(([x,z],i) => tree(x,z,.85 + i % 2 * .15));
     // Two benches, a street lamp and flower beds ground the restaurant in a neighbourhood.
     for (const x of [-5.4, 4.3]) {
-      this.box(1.6, .12, .48, '#aa845d', x, -.1, 8.1, outer);
-      this.box(1.6, .45, .09, '#b99465', x, .15, 8.35, outer);
-      for (const dx of [-.57, .57]) this.box(.09, .5, .4, '#536e60', x + dx, -.35, 8.1, outer);
+      const bench = this.group(x, -.65, 8.05, outer);
+      this.box(1.6, .12, .42, '#aa845d', 0, .55, 0, bench);
+      this.box(1.6, .45, .09, '#b99465', 0, .8, -.21, bench);
+      for (const dx of [-.57, .57]) this.box(.09, .5, .36, '#536e60', dx, .3, 0, bench);
     }
     for (const x of [-7.7, 7.9]) {
       this.box(.14, 2.65, .14, '#54766a', x, .68, 8.2, outer);
       this.sphere(.3, '#f6e7b7', x, 2.13, 8.2, outer);
       this.box(1.15, .3, 1.1, '#b3a782', x, -.48, 7.85, outer);
       for (let i = 0; i < 5; i++) this.sphere(.16, i % 2 ? '#dca88e' : '#e9ce8d', x + Math.sin(i * 2.4) * .32, -.13, 7.85 + Math.cos(i * 2.4) * .32, outer);
+    }
+  }
+
+  buildStreets() {
+    const { x, z, width, crossing, stripeWidth, stop } = globalThis.BistroStreet.road;
+    const half = width / 2, outer = this.exterior;
+    this.box(90, .06, width, '#839295', 0, -.75, z, outer);
+    this.box(width, .06, 90, '#839295', x, -.75, 0, outer);
+    // 人行道在车行道边缘断开，只在四个街角连接，不能覆盖十字路口。
+    for (const [left, right] of [[-45, x - half], [x + half, 45]]) {
+      for (const side of [-1, 1]) this.box(right - left, .08, 1.5, '#d9ceb4', (left + right) / 2, -.65, z + side * (half + .75), outer);
+    }
+    for (const [top, bottom] of [[-45, z - half], [z + half, 45]]) {
+      for (const side of [-1, 1]) this.box(1.5, .08, bottom - top, '#d9ceb4', x + side * (half + .75), -.65, (top + bottom) / 2, outer);
+    }
+    for (const side of [-1, 1]) for (let i = -3; i <= 3; i++) {
+      const bar = .46, offset = i * (width - bar) / 6;
+      this.box(stripeWidth, .018, bar, '#efe9ce', x + side * crossing, -.705, z + offset, outer);
+      this.box(bar, .018, stripeWidth, '#efe9ce', x + offset, -.705, z + side * crossing, outer);
+    }
+    for (let along = -40; along <= 40; along += 3) {
+      if (Math.abs(along - x) > crossing + stripeWidth / 2 + .8) this.box(1.35, .012, .07, '#f5e8c5', along, -.709, z, outer);
+      if (Math.abs(along - z) > crossing + stripeWidth / 2 + .8) this.box(.07, .012, 1.35, '#f5e8c5', x, -.709, along, outer);
+      for (const side of [-1, 1]) {
+        if (Math.abs(along - x) > half) this.box(.025, .01, 1.4, '#c4b79d', along, -.604, z + side * (half + .75), outer);
+        if (Math.abs(along - z) > half) this.box(1.4, .01, .025, '#c4b79d', x + side * (half + .75), -.604, along, outer);
+      }
+    }
+    const line = stop - .9;
+    for (const side of [-1, 1]) {
+      this.box(.1, .018, 2.05, '#f0e4c4', x + side * line, -.705, z + side * 1.1, outer);
+      this.box(2.05, .018, .1, '#f0e4c4', x - side * 1.1, -.705, z + side * line, outer);
+    }
+    this.signals = [];
+    for (const [sx, sz, axis, angle] of [
+      [x + half + .65, z - line, 'vertical', Math.PI], [x - half - .65, z + line, 'vertical', 0],
+      [x + line, z - half - .65, 'horizontal', Math.PI / 2], [x - line, z + half + .65, 'horizontal', -Math.PI / 2]
+    ]) {
+      const pole = this.group(sx, -.61, sz, outer); pole.rotation.y = angle;
+      this.box(.12, 2.3, .12, '#536e60', 0, 1.15, 0, pole);
+      this.box(.42, 1.04, .24, '#40584f', 0, 2.42, 0, pole);
+      for (const [i, color] of ['red', 'yellow', 'green'].entries()) {
+        const lamps = [-.14, .14].map(depth => this.sphere(.105, '#526359', 0, 2.73 - i * .3, depth, pole));
+        this.signals.push({ axis, color, lamps });
+      }
+      this.box(.32, .65, .24, '#40584f', .47, 1.86, 0, pole);
+      for (const [i, color] of ['red', 'green'].entries()) {
+        const lamps = [-.14, .14].map(depth => this.sphere(.09, '#526359', .47, 2.02 - i * .3, depth, pole));
+        this.signals.push({ axis: 'pedestrian', color, lamps });
+      }
+    }
+    this.updateSignals({ horizontal: 'green', vertical: 'red', pedestrian: 'red' });
+  }
+
+  updateSignals(signal) {
+    const colors = { red: '#f06e59', yellow: '#f4c65f', green: '#7bd193' };
+    for (const light of this.signals) {
+      const active = signal[light.axis] === light.color;
+      const key = 'signal/' + (active ? light.color : 'off');
+      if (!this.materials.has(key)) this.materials.set(key, new THREE.MeshStandardMaterial({
+        color: active ? colors[light.color] : '#344c43', emissive: active ? colors[light.color] : '#000000', emissiveIntensity: active ? .8 : 0, roughness: .5
+      }));
+      for (const lamp of light.lamps) lamp.material = this.materials.get(key);
     }
   }
 
@@ -232,7 +302,23 @@ export class Restaurant {
     this.box(18.65, .13, .33, '#b89869', 0, 2.53, -7.02);
     this.box(.34, .13, 14.15, '#b89869', -9.18, 2.53, -.05);
     // The two open edges keep furniture and routes readable from the fixed camera.
-    this.box(18.5, .12, .15, '#b38b58', 0, .07, 7.0);
+    this.box(8.7, .12, .15, '#b38b58', -4.9, .07, 7.0);
+    this.box(7.6, .12, .15, '#b38b58', 5.45, .07, 7.0);
+    this.door = this.group(L.door[0], 0, L.door[1]);
+    for (const x of [-1.02, 1.02]) this.box(.15, 2.45, .2, '#638d7b', x, 1.18, 0, this.door);
+    this.box(2.2, .17, .23, '#638d7b', 0, 2.4, 0, this.door);
+    this.box(1.85, .3, .17, '#ead9ae', 0, 2.67, 0, this.door);
+    this.text('欢迎光临', 1.5, .24, '#58745e', null, 0, 2.67, .1, this.door);
+    const leaf = this.group(-.925, 0, 0, this.door);
+    leaf.rotation.y = Math.PI * .48;
+    this.box(1.84, 2.24, .08, '#9fb9a4', .92, 1.18, 0, leaf);
+    this.box(1.53, 1.43, .1, '#c0d8ce', .92, 1.43, 0, leaf);
+    this.sphere(.06, '#c69d59', 1.63, 1.02, .09, leaf);
+    const ramp = this.box(1.9, .12, 1.4, '#c7b591', L.door[0], -.25, 7.55);
+    ramp.rotation.x = .38;
+    this.box(7.7, .18, .85, '#c7b591', 5.35, -.42, 7.4);
+    for (let i = 0; i < 6; i++) this.cylinder(.19, .025, '#eadbb9', 2.2 + i * .94, -.28, 7.4);
+
     this.box(.15, .12, 14, '#b38b58', 9.05, .07, 0);
     this.window(-4.65, 1.78, -6.85);
     this.box(2.3, 1.32, .1, '#9f754c', -.85, 1.68, -6.8);
@@ -243,8 +329,8 @@ export class Restaurant {
     this.plant(-8.3, 6.1, 1.25);
     this.plant(-8.25, -5.7, .85);
     this.plant(8.15, 6.1, 1.15);
-    this.box(1.4, .04, .75, '#91a98b', -.2, .06, 6.4);
-    for (let i = 0; i < 6; i++) this.box(.015, .01, .58, '#bcc5a4', -.75 + i * .21, .09, 6.4);
+    this.box(1.4, .04, .75, '#91a98b', L.door[0], .06, 6.4);
+    for (let i = 0; i < 6; i++) this.box(.015, .01, .58, '#bcc5a4', L.door[0] - .525 + i * .21, .09, 6.4);
     this.text('BUG BISTRO', 3.4, .44, '#e9e4c7', null, 0, -.38, 7.28);
     // A few garden stones make the platform feel like a little diorama.
     [[-9.6, 5.7], [-9.7, 4.7], [9.6, 5.4], [-8.5, 7.5], [7.8, 7.5]].forEach(([x, z], i) => {
@@ -489,23 +575,31 @@ export class Restaurant {
     return root;
   }
 
-  pose(root, t, action) {
+  pose(root, t, action, progress = 0) {
     const { body, head, arms, legs, tray, tool } = root.userData.parts;
     const walk = action === 'walk' || action === 'carry';
+    const handoff = action === 'pickup' || action === 'putdown';
+    const carry = action === 'carry' || action === 'hold';
+    const p = Math.max(0, Math.min(1, progress)), smooth = p * p * (3 - 2 * p);
+    const lift = action === 'pickup' ? smooth : action === 'putdown' ? 1 - smooth : Number(carry);
+    const reach = handoff ? Math.sin(p * Math.PI) : 0;
+    body.rotation.x = reach * .12;
+    tray.position.y = 1.13 - reach * .12;
+    tray.position.z = .64 + reach * .14;
     body.position.y = walk ? Math.abs(Math.sin(t * 10)) * .055 : Math.sin(t * 2.5) * .018;
     body.rotation.z = walk ? Math.sin(t * 10) * .035 : 0;
     head.rotation.y = action === 'eat' ? Math.sin(t * 2) * .08 : Math.sin(t * 1.4) * .035;
     for (let i = 0; i < 2; i++) {
-      arms[i].position.y = action === 'carry' ? 1.23 : .94;
+      arms[i].position.y = .94 + lift * .29;
       legs[i].rotation.x = walk ? Math.sin(t * 10 + i * Math.PI) * .53 : 0;
-      arms[i].rotation.x = action === 'carry' ? -1.05 : action === 'cook' ? -2.15 + Math.sin(t * 5 + i * 2) * .12 : action === 'eat' ? -.5 + Math.sin(t * 5 + i * 2) * .3 : walk ? Math.sin(t * 10 + i * Math.PI) * -.4 : 0;
+      arms[i].rotation.x = handoff ? -1.05 * lift - reach * .15 : carry ? -1.05 : action === 'cook' ? -2.15 + Math.sin(t * 5 + i * 2) * .12 : action === 'eat' ? -.5 + Math.sin(t * 5 + i * 2) * .3 : walk ? Math.sin(t * 10 + i * Math.PI) * -.4 : 0;
     }
     if (tool.visible) {
       // Counter-rotate the wrist: the arm lifts the hand while the spatula reaches into the pan.
       tool.rotation.x = action === 'cook' ? -arms[1].rotation.x - .25 : .7;
       tool.rotation.y = .2;
     }
-    tray.visible = action === 'carry';
+    tray.visible = carry;
   }
 
   route(points, progress) {
@@ -545,12 +639,7 @@ export class Restaurant {
     const { clientWidth: width, clientHeight: height } = this.canvas.parentElement;
     if (!width || !height) return;
     this.renderer.setSize(width, height, false);
-    const aspect = width / height;
-    const half = this.cameraIndex === 1 ? 9.5 : 11.8;
-    this.camera.left = -half * aspect;
-    this.camera.right = half * aspect;
-    this.camera.top = half;
-    this.camera.bottom = -half;
+    Object.assign(this.camera, cameraFrame(width, height, this.cameraIndex));
     this.camera.updateProjectionMatrix();
   }
 
@@ -566,14 +655,13 @@ export class Restaurant {
     const supply = state.runner;
     const carrying = ['travel', 'putdown', 'waiting'].includes(supply.phase);
     this.ingredients.forEach((item, i) => { item.visible = i < Math.min(6, state.counts.todo - Number(carrying)); });
-    const supplyPose = supply.phase === 'travel' ? this.route(SUPPLY_ROUTE, supply.progress)
-      : supply.phase === 'return' ? this.route([...SUPPLY_ROUTE].reverse(), supply.progress)
-      : this.route(SUPPLY_ROUTE, carrying ? 1 : 0);
+    const supplyPose = supply.pose;
     this.runner.position.set(supplyPose.x, .03, supplyPose.z);
     this.runner.rotation.y = ['idle', 'pickup'].includes(supply.phase) ? Math.PI : supplyPose.angle;
-    this.pose(this.runner, t, carrying ? 'carry' : supply.phase === 'return' && this.animated ? 'walk' : 'idle');
+    const supplyAction = this.animated && ['pickup', 'putdown'].includes(supply.phase) ? supply.phase : null;
+    this.pose(this.runner, t, supplyAction || (carrying ? supply.pose.moving && this.animated ? 'carry' : 'hold' : supply.pose.moving && this.animated ? 'walk' : 'idle'), supply.progress);
     this.runner.userData.parts.tray.visible = carrying;
-    const waiting = state.orders.filter(o => o.status === 'ready' && o.id !== state.waiter.orderId).length;
+    const waiting = state.orders.filter(o => o.delivery === 'waiting').length;
     this.readyDishes.forEach((item, i) => { item.visible = i < waiting; });
     this.steam.forEach((puff, i) => {
       puff.visible = chefActive && this.animated;
@@ -583,30 +671,19 @@ export class Restaurant {
       puff.material.opacity = (1 - f) * .4;
     });
     const waiter = state.waiter;
-    let pose = { x: PICKUP[0], z: PICKUP[1], angle: Math.PI / 2 };
-    if (waiter.seat !== null) {
-      const route = ROUTES[waiter.seat];
-      if (waiter.phase === 'travel') pose = this.route(route, waiter.progress);
-      else if (waiter.phase === 'putdown') pose = { ...this.route(route, 1), angle: -Math.PI / 2 };
-      else if (waiter.phase === 'return') pose = this.route([...route].reverse(), waiter.progress);
-    }
+    const pose = { ...waiter.pose };
+    if (waiter.phase === 'putdown') pose.angle = waiter.side === 0 ? -Math.PI / 2 : Math.PI / 2;
     this.waiter.position.set(pose.x, .03, pose.z);
     this.waiter.rotation.y = pose.angle;
     const carry = ['travel', 'putdown'].includes(waiter.phase);
-    this.pose(this.waiter, t, this.animated ? carry ? 'carry' : waiter.phase === 'return' ? 'walk' : 'idle' : 'idle');
+    const waiterAction = this.animated && ['pickup', 'putdown'].includes(waiter.phase) ? waiter.phase : null;
+    this.pose(this.waiter, t, waiterAction || (carry ? waiter.pose.moving && this.animated ? 'carry' : 'hold' : waiter.pose.moving && this.animated ? 'walk' : 'idle'), waiter.progress);
     // A carried plate remains visible even when motion is disabled.
     this.waiter.userData.parts.tray.visible = carry;
     if (!this.animated && carry) this.waiter.userData.parts.arms.forEach(arm => { arm.rotation.x = -1.05; });
-    this.guests.forEach((guest, i) => {
-      const seat = state.seats[i];
-      const reserved = waiter.seat === i && ['pickup', 'travel', 'putdown'].includes(waiter.phase);
-      guest.visible = seat.phase !== 'empty' || reserved || state.counts.todo + state.counts.cooking + state.counts.ready > i;
-      this.pose(guest, t + i, seat.phase === 'eat' && this.animated ? 'eat' : 'idle');
-      guest.userData.parts.legs.forEach(leg => { leg.rotation.x = -Math.PI / 2; });
-      this.tableDishes[i].visible = seat.phase !== 'empty';
-      if (seat.phase === 'happy' && this.animated) guest.userData.parts.arms.forEach((arm, j) => { arm.rotation.z = (j ? -1 : 1) * 2.1; });
-      else guest.userData.parts.arms.forEach((arm, j) => { arm.rotation.z = (j ? 1 : -1) * .16; });
-    });
+    this.renderGuests(state, t);
+    this.traffic.update(state, this.animated && this.exterior.visible);
+    this.updateBubbles(state);
     this.camera.updateMatrixWorld();
     const { clientWidth: width, clientHeight: height } = this.canvas;
     for (const label of [this.prepLabel, this.stoveLabel, this.passLabel]) {
@@ -616,6 +693,86 @@ export class Restaurant {
       label.element.querySelector('em').textContent = state.counts[label.filter];
     }
     this.renderer.render(this.scene, this.camera);
+  }
+
+  renderGuests(state, t) {
+    const active = new Set(state.guests.map(g => g.id));
+    for (const [id, actor] of this.guestActors) {
+      if (!active.has(id)) { actor.visible = false; this.guestActors.delete(id); }
+    }
+    this.tableDishes.forEach(dish => { dish.visible = false; });
+    for (const g of state.guests) {
+      let actor = this.guestActors.get(g.id);
+      if (!actor) {
+        actor = this.guestPool.find(a => !a.visible);
+        if (!actor) {
+          actor = this.character('guest', ['#d68d78', '#bba365', '#719aaa', '#c29982'][g.variant], g.variant);
+          actor.scale.setScalar(1.04);
+          this.guestPool.push(actor);
+        }
+        actor.visible = true; this.guestActors.set(g.id, actor);
+      }
+      const seated = ['sitting', 'waiting', 'delivery', 'eat', 'happy', 'standing'].includes(g.phase);
+      const s = g.table === null ? null : L.seat(g.table, g.side);
+      const pos = { ...g.pose, angle: seated ? s.angle : g.pose.angle };
+      let blend = seated ? 1 : 0;
+      if (g.phase === 'sitting') blend = g.progress;
+      if (g.phase === 'standing') blend = 1 - g.progress;
+      const ground = THREE.MathUtils.lerp(.03, -.55, THREE.MathUtils.clamp((pos.z - 7) / .9, 0, 1));
+      actor.position.set(pos.x, ground + .18 * blend, pos.z);
+      actor.rotation.y = pos.angle;
+      actor.userData.filter = g.orderId ? 'bug:' + g.orderId : g.table;
+      const walking = g.pose.moving;
+      this.pose(actor, this.animated ? t + g.variant : 0, g.phase === 'eat' && this.animated ? 'eat' : walking && this.animated ? 'walk' : 'idle');
+      if (seated) actor.userData.parts.legs.forEach(leg => { leg.rotation.x = -Math.PI / 2 * blend; });
+      actor.userData.parts.arms.forEach((arm, i) => { arm.rotation.z = g.phase === 'happy' && this.animated ? (i ? -1 : 1) * 2.1 : (i ? 1 : -1) * .16; });
+      if (g.phase === 'eat' || g.phase === 'happy') {
+        const dish = this.tableDishes[g.table];
+        dish.visible = true; dish.position.x = s.dish[0]; dish.position.z = s.dish[1];
+      }
+    }
+  }
+
+  updateBubbles(state) {
+    const { clientWidth: stageWidth, clientHeight: stageHeight } = this.canvas;
+    const clearTop = document.body.matches('.desktop-mode,.preview,.fullscreen-mode') ? 12 : 185;
+    const wanted = [];
+    const w = state.waiter;
+    if (['pickup', 'travel', 'putdown'].includes(w.phase)) wanted.push({ key: 'waiter', actor: this.waiter, id: w.orderId, caption: '正在上餐' });
+    for (const g of state.guests) if (g.phase === 'eat') wanted.push({ key: g.id, actor: this.guestActors.get(g.id), id: g.orderId, caption: '正在享用' });
+    const keys = new Set(wanted.map(b => b.key));
+    for (const [key, node] of this.bubbleNodes) if (!keys.has(key)) { node.remove(); this.bubbleNodes.delete(key); }
+    const occupied = [this.prepLabel, this.stoveLabel, this.passLabel].map(label => {
+      const p = label.point.clone().project(this.camera);
+      return { x: (p.x + 1) * stageWidth / 2 - 55, y: (1 - p.y) * stageHeight / 2 - 50, w: 110, h: 50 };
+    });
+    for (const bubble of wanted) {
+      const order = state.orders.find(o => o.id === bubble.id);
+      if (!order) continue;
+      let node = this.bubbleNodes.get(bubble.key);
+      if (!node) {
+        node = document.createElement('button'); node.type = 'button'; node.className = 'bug-bubble';
+        node.append(document.createElement('small'), document.createElement('span'));
+        this.bubbleLayer.append(node); this.bubbleNodes.set(bubble.key, node);
+      }
+      node.dataset.bug = order.id;
+      node.title = order.title; node.setAttribute('aria-label', `${bubble.caption}：${order.title}，查看 Bug 明细`);
+      node.firstChild.textContent = bubble.caption + ' · ' + order.id;
+      node.lastChild.textContent = order.title;
+      const p = bubble.actor.position.clone(); p.y += 2.05; p.project(this.camera);
+      const headX = (p.x + 1) * stageWidth / 2, headY = (1 - p.y) * stageHeight / 2;
+      const width = node.offsetWidth, height = node.offsetHeight;
+      let rect;
+      for (let row = 0; row < 6; row++) {
+        const x = THREE.MathUtils.clamp(headX - width / 2 + (row % 2 ? 35 : 0), 12, stageWidth - width - 12);
+        const y = Math.max(clearTop, headY - height - 8 - Math.floor(row / 2) * (height + 12));
+        rect = { x, y, w: width, h: height };
+        if (!occupied.some(o => rect.x < o.x + o.w + 6 && rect.x + rect.w + 6 > o.x && rect.y < o.y + o.h + 6 && rect.y + rect.h + 6 > o.y)) break;
+      }
+      occupied.push(rect);
+      node.style.left = rect.x + 'px'; node.style.top = rect.y + 'px';
+      node.style.setProperty('--stem', `${THREE.MathUtils.clamp(headX - rect.x, 12, width - 12)}px`);
+    }
   }
 
   hit(clientX, clientY) {
@@ -644,6 +801,11 @@ export class Restaurant {
     this.scene.updateMatrixWorld(true);
     return {
       room: { ...ROOM },
+      door: this.door.position.toArray(),
+      guests: [...this.guestActors].map(([id, actor]) => ({ id, position: actor.position.toArray(), angle: actor.rotation.y, filter: actor.userData.filter })),
+      guestPoolSize: this.guestPool.length,
+      traffic: this.traffic.inspect(),
+      bubbles: [...this.bubbleNodes.values()].map(n => ({ id: n.dataset.bug, title: n.lastChild.textContent })),
       pass: { position: this.pass.position.toArray(), width: 1.42 },
       runner: { position: this.runner.position.toArray(), carrying: this.runner.userData.parts.tray.visible, route: SUPPLY_ROUTE.map(point => [...point]) },
       deliveryRoutes: ROUTES.map(route => route.map(point => [...point])),

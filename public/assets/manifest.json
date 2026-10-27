@@ -1,0 +1,790 @@
+[
+  {
+    "name": "chef_idle",
+    "source": "image2.png",
+    "rect": [
+      22,
+      44,
+      112,
+      189
+    ],
+    "size": [
+      90,
+      145
+    ],
+    "file": "chef_idle.png",
+    "transparent": true
+  },
+  {
+    "name": "waiter_idle",
+    "source": "image2.png",
+    "rect": [
+      125,
+      58,
+      212,
+      190
+    ],
+    "size": [
+      87,
+      132
+    ],
+    "file": "waiter_idle.png",
+    "transparent": true
+  },
+  {
+    "name": "guest_man",
+    "source": "image2.png",
+    "rect": [
+      225,
+      63,
+      303,
+      190
+    ],
+    "size": [
+      78,
+      127
+    ],
+    "file": "guest_man.png",
+    "transparent": true
+  },
+  {
+    "name": "guest_woman",
+    "source": "image2.png",
+    "rect": [
+      321,
+      61,
+      394,
+      189
+    ],
+    "size": [
+      73,
+      128
+    ],
+    "file": "guest_woman.png",
+    "transparent": true
+  },
+  {
+    "name": "guest_reader",
+    "source": "image2.png",
+    "rect": [
+      403,
+      63,
+      482,
+      190
+    ],
+    "size": [
+      79,
+      127
+    ],
+    "file": "guest_reader.png",
+    "transparent": true
+  },
+  {
+    "name": "chef_cook",
+    "source": "image2.png",
+    "rect": [
+      537,
+      46,
+      629,
+      190
+    ],
+    "size": [
+      92,
+      144
+    ],
+    "file": "chef_cook.png",
+    "transparent": true
+  },
+  {
+    "name": "chef_toss",
+    "source": "image2.png",
+    "rect": [
+      634,
+      48,
+      724,
+      190
+    ],
+    "size": [
+      90,
+      142
+    ],
+    "file": "chef_toss.png",
+    "transparent": true
+  },
+  {
+    "name": "chef_plate",
+    "source": "image2.png",
+    "rect": [
+      735,
+      57,
+      823,
+      190
+    ],
+    "size": [
+      88,
+      133
+    ],
+    "file": "chef_plate.png",
+    "transparent": true
+  },
+  {
+    "name": "chef_panic",
+    "source": "image2.png",
+    "rect": [
+      840,
+      44,
+      936,
+      191
+    ],
+    "size": [
+      96,
+      147
+    ],
+    "file": "chef_panic.png",
+    "transparent": true
+  },
+  {
+    "name": "waiter_carry",
+    "source": "image2.png",
+    "rect": [
+      962,
+      60,
+      1059,
+      191
+    ],
+    "size": [
+      97,
+      131
+    ],
+    "file": "waiter_carry.png",
+    "transparent": true
+  },
+  {
+    "name": "waiter_walk",
+    "source": "image2.png",
+    "rect": [
+      1080,
+      62,
+      1172,
+      190
+    ],
+    "size": [
+      92,
+      128
+    ],
+    "file": "waiter_walk.png",
+    "transparent": true
+  },
+  {
+    "name": "guest_eat",
+    "source": "image2.png",
+    "rect": [
+      1204,
+      58,
+      1296,
+      191
+    ],
+    "size": [
+      92,
+      133
+    ],
+    "file": "guest_eat.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_stove",
+    "source": "image2.png",
+    "rect": [
+      18,
+      528,
+      168,
+      636
+    ],
+    "size": [
+      150,
+      108
+    ],
+    "file": "prop_stove.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_prep",
+    "source": "image2.png",
+    "rect": [
+      173,
+      529,
+      328,
+      641
+    ],
+    "size": [
+      155,
+      112
+    ],
+    "file": "prop_prep.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_fridge",
+    "source": "image2.png",
+    "rect": [
+      332,
+      521,
+      404,
+      638
+    ],
+    "size": [
+      72,
+      117
+    ],
+    "file": "prop_fridge.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_shelf",
+    "source": "image2.png",
+    "rect": [
+      410,
+      521,
+      500,
+      638
+    ],
+    "size": [
+      90,
+      117
+    ],
+    "file": "prop_shelf.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_sink",
+    "source": "image2.png",
+    "rect": [
+      505,
+      539,
+      607,
+      638
+    ],
+    "size": [
+      102,
+      99
+    ],
+    "file": "prop_sink.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_pans",
+    "source": "image2.png",
+    "rect": [
+      631,
+      523,
+      719,
+      640
+    ],
+    "size": [
+      88,
+      117
+    ],
+    "file": "prop_pans.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_rack",
+    "source": "image2.png",
+    "rect": [
+      729,
+      545,
+      849,
+      622
+    ],
+    "size": [
+      120,
+      77
+    ],
+    "file": "prop_rack.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_baskets",
+    "source": "image2.png",
+    "rect": [
+      871,
+      527,
+      1007,
+      641
+    ],
+    "size": [
+      136,
+      114
+    ],
+    "file": "prop_baskets.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_ingredients",
+    "source": "image2.png",
+    "rect": [
+      1037,
+      513,
+      1297,
+      640
+    ],
+    "size": [
+      260,
+      127
+    ],
+    "file": "prop_ingredients.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_todo",
+    "source": "image2.png",
+    "rect": [
+      21,
+      715,
+      140,
+      804
+    ],
+    "size": [
+      119,
+      89
+    ],
+    "file": "dish_todo.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_cooking",
+    "source": "image2.png",
+    "rect": [
+      166,
+      706,
+      296,
+      804
+    ],
+    "size": [
+      130,
+      98
+    ],
+    "file": "dish_cooking.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_ready",
+    "source": "image2.png",
+    "rect": [
+      320,
+      719,
+      444,
+      804
+    ],
+    "size": [
+      124,
+      85
+    ],
+    "file": "dish_ready.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_served",
+    "source": "image2.png",
+    "rect": [
+      469,
+      720,
+      594,
+      804
+    ],
+    "size": [
+      125,
+      84
+    ],
+    "file": "dish_served.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_pork",
+    "source": "image2.png",
+    "rect": [
+      645,
+      740,
+      729,
+      804
+    ],
+    "size": [
+      84,
+      64
+    ],
+    "file": "dish_pork.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_rice",
+    "source": "image2.png",
+    "rect": [
+      758,
+      741,
+      842,
+      804
+    ],
+    "size": [
+      84,
+      63
+    ],
+    "file": "dish_rice.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_ramen",
+    "source": "image2.png",
+    "rect": [
+      873,
+      738,
+      959,
+      804
+    ],
+    "size": [
+      86,
+      66
+    ],
+    "file": "dish_ramen.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_skewer",
+    "source": "image2.png",
+    "rect": [
+      981,
+      739,
+      1067,
+      804
+    ],
+    "size": [
+      86,
+      65
+    ],
+    "file": "dish_skewer.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_salad",
+    "source": "image2.png",
+    "rect": [
+      1098,
+      740,
+      1184,
+      804
+    ],
+    "size": [
+      86,
+      64
+    ],
+    "file": "dish_salad.png",
+    "transparent": true
+  },
+  {
+    "name": "dish_cake",
+    "source": "image2.png",
+    "rect": [
+      1205,
+      738,
+      1292,
+      804
+    ],
+    "size": [
+      87,
+      66
+    ],
+    "file": "dish_cake.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_table",
+    "source": "image2.png",
+    "rect": [
+      18,
+      894,
+      145,
+      981
+    ],
+    "size": [
+      127,
+      87
+    ],
+    "file": "prop_table.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_plant",
+    "source": "image2.png",
+    "rect": [
+      166,
+      893,
+      215,
+      978
+    ],
+    "size": [
+      49,
+      85
+    ],
+    "file": "prop_plant.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_menu",
+    "source": "image2.png",
+    "rect": [
+      245,
+      886,
+      347,
+      982
+    ],
+    "size": [
+      102,
+      96
+    ],
+    "file": "prop_menu.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_register",
+    "source": "image2.png",
+    "rect": [
+      372,
+      890,
+      478,
+      981
+    ],
+    "size": [
+      106,
+      91
+    ],
+    "file": "prop_register.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_book",
+    "source": "image2.png",
+    "rect": [
+      510,
+      897,
+      574,
+      978
+    ],
+    "size": [
+      64,
+      81
+    ],
+    "file": "prop_book.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_plates",
+    "source": "image2.png",
+    "rect": [
+      603,
+      897,
+      680,
+      978
+    ],
+    "size": [
+      77,
+      81
+    ],
+    "file": "prop_plates.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_sauce",
+    "source": "image2.png",
+    "rect": [
+      715,
+      896,
+      786,
+      977
+    ],
+    "size": [
+      71,
+      81
+    ],
+    "file": "prop_sauce.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_bin",
+    "source": "image2.png",
+    "rect": [
+      821,
+      900,
+      875,
+      978
+    ],
+    "size": [
+      54,
+      78
+    ],
+    "file": "prop_bin.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_boxes",
+    "source": "image2.png",
+    "rect": [
+      909,
+      894,
+      989,
+      978
+    ],
+    "size": [
+      80,
+      84
+    ],
+    "file": "prop_boxes.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_lantern",
+    "source": "image2.png",
+    "rect": [
+      1021,
+      894,
+      1074,
+      976
+    ],
+    "size": [
+      53,
+      82
+    ],
+    "file": "prop_lantern.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_clock",
+    "source": "image2.png",
+    "rect": [
+      1104,
+      895,
+      1156,
+      958
+    ],
+    "size": [
+      52,
+      63
+    ],
+    "file": "prop_clock.png",
+    "transparent": true
+  },
+  {
+    "name": "prop_sign",
+    "source": "image2.png",
+    "rect": [
+      1180,
+      894,
+      1297,
+      971
+    ],
+    "size": [
+      117,
+      77
+    ],
+    "file": "prop_sign.png",
+    "transparent": true
+  },
+  {
+    "name": "chef_happy",
+    "source": "image2.png",
+    "rect": [
+      483,
+      1061,
+      550,
+      1137
+    ],
+    "size": [
+      67,
+      76
+    ],
+    "file": "chef_happy.png",
+    "transparent": true
+  },
+  {
+    "name": "chef_tired",
+    "source": "image2.png",
+    "rect": [
+      554,
+      1061,
+      622,
+      1137
+    ],
+    "size": [
+      68,
+      76
+    ],
+    "file": "chef_tired.png",
+    "transparent": true
+  },
+  {
+    "name": "chef_sweat",
+    "source": "image2.png",
+    "rect": [
+      623,
+      1061,
+      696,
+      1137
+    ],
+    "size": [
+      73,
+      76
+    ],
+    "file": "chef_sweat.png",
+    "transparent": true
+  },
+  {
+    "name": "chef_angry",
+    "source": "image2.png",
+    "rect": [
+      698,
+      1061,
+      768,
+      1137
+    ],
+    "size": [
+      70,
+      76
+    ],
+    "file": "chef_angry.png",
+    "transparent": true
+  },
+  {
+    "name": "room_dining",
+    "source": "image2.png",
+    "rect": [
+      580,
+      276,
+      769,
+      452
+    ],
+    "file": "room_dining.jpg",
+    "transparent": false
+  },
+  {
+    "name": "room_kitchen",
+    "source": "image2.png",
+    "rect": [
+      782,
+      276,
+      951,
+      452
+    ],
+    "file": "room_kitchen.jpg",
+    "transparent": false
+  },
+  {
+    "name": "room_window",
+    "source": "image2.png",
+    "rect": [
+      963,
+      276,
+      1122,
+      452
+    ],
+    "file": "room_window.jpg",
+    "transparent": false
+  }
+]

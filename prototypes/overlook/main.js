@@ -1,14 +1,20 @@
 import { Restaurant } from './scene.js';
+import { connectDesktop } from './desktop-client.js';
+import { fitViewport } from './viewport.js';
 
 // Two disposable camera variants on the same scene; the Mock model owns both delivery workers.
 const $ = id => document.getElementById(id);
 const variants = ['angled', 'front'];
 function scaleViewport() {
-  document.documentElement.style.setProperty('--view-scale', Math.min(innerWidth / 1600, innerHeight / 900));
+  const view = fitViewport(innerWidth, innerHeight);
+  const style = document.documentElement.style;
+  style.setProperty('--view-scale', view.scale);
+  style.setProperty('--desktop-width', `${view.width}px`);
+  style.setProperty('--desktop-height', `${view.height}px`);
 }
 scaleViewport();
 window.addEventListener('resize', scaleViewport);
-const names = { todo: '等待备料', cooking: '正在烹饪', ready: '等待上菜', closed: '本轮已上桌' };
+const names = { todo: '等待备料', cooking: '正在烹饪', ready: '等待上菜', closed: '本轮已完成' };
 const model = new globalThis.BistroModel();
 let restaurant, filter, focusBefore, last = performance.now(), lastDraw = 0, lastUi = 0, dirty = true;
 const format = time => `${String(Math.floor(time / 60)).padStart(2, '0')}:${String(Math.floor(time % 60)).padStart(2, '0')}`;
@@ -21,7 +27,9 @@ function reset() {
 }
 
 function list(snapshot) {
-  const orders = snapshot.orders.filter(order => typeof filter === 'number' ? order.seat === filter : order.status === filter);
+  const orders = snapshot.orders.filter(order => typeof filter === 'number' ? order.seat === filter
+    : filter?.startsWith('bug:') ? order.id === filter.slice(4)
+    : filter === 'ready' ? ['waiting', 'serving'].includes(order.delivery) : order.status === filter);
   $('orders').replaceChildren();
   if (!orders.length) {
     const p = document.createElement('p');
@@ -31,16 +39,17 @@ function list(snapshot) {
   for (const order of orders) {
     const row = document.createElement('article'); row.className = 'order';
     const id = document.createElement('small'); id.textContent = order.id;
-    const status = document.createElement('small'); status.className = 'status'; status.textContent = names[order.status];
+    const status = document.createElement('small'); status.className = 'status'; status.textContent = names[order.status] + (order.delivery === 'waiting' || order.delivery === 'serving' ? ' · 等待上餐展示' : order.delivery === 'eating' ? ' · 正在用餐' : '');
     const title = document.createElement('b'); title.textContent = order.title;
-    const time = document.createElement('small'); time.textContent = `来单 ${format(order.createdAt)}${order.closedAt === null ? '' : ` · 已上桌 ${format(order.closedAt)}`}`;
+    const time = document.createElement('small'); time.textContent = `来单 ${format(order.createdAt)}${order.closedAt === null ? '' : ` · 已完成 ${format(order.closedAt)}`}`;
+    if (order.servedAt !== null) time.textContent += ` · 已上桌 ${format(order.servedAt)}`;
     row.append(id, status, title, time); $('orders').append(row);
   }
 }
 
 function open(value) {
   filter = value; focusBefore = document.activeElement;
-  $('panel-title').textContent = typeof value === 'number' ? `${value + 1} 号桌 · Bug 记录` : names[value];
+  $('panel-title').textContent = typeof value === 'number' ? `${value + 1} 号桌 · Bug 记录` : value.startsWith('bug:') ? '本次餐点 · Bug 明细' : names[value];
   $('veil').hidden = false; list(model.snapshot()); $('close').focus();
 }
 
@@ -62,6 +71,12 @@ function ui(s = model.snapshot()) {
     time.textContent = format(event.time);
     row.append(time, document.createTextNode(event.text)); $('log').append(row);
   }
+  $('waiting-value').textContent = `${s.limits.waiting} 人`;
+  $('vehicle-value').textContent = `${s.limits.vehicles} 辆`;
+  $('waiting-current').textContent = `候位 ${s.guests.filter(g => g.phase === 'queued').length} 人 / 顾客共 ${s.guests.length} 人 · 总目标上限 ${4 + s.limits.waiting}`;
+  $('vehicle-current').textContent = `当前 ${restaurant?.traffic.inspect().active || 0} 辆 / 两路共用上限 ${s.limits.vehicles} 辆`;
+  $('arrival-toast').hidden = s.mergedArrivals === 0;
+  $('arrival-toast').textContent = `新增 Bug +${s.mergedArrivals} · 已合并来客提示`;
   if (!$('veil').hidden) list(s);
 }
 
@@ -106,13 +121,13 @@ function setPreview(enabled) {
 }
 document.querySelectorAll('[data-view]').forEach(button => { button.onclick = () => setView(button.dataset.view); });
 $('camera').onclick = () => setView(variants[(restaurant.cameraIndex + 1) % 2]);
-$('home').onclick = () => setView('front');
+$('home').onclick = () => setView('angled');
 $('preview').onclick = () => setPreview(true);
 $('exit-preview').onclick = () => setPreview(false);
-setView(new URLSearchParams(location.search).get('variant') || 'front');
-$('show-exterior').onchange = event => { if (restaurant) restaurant.exterior.visible = event.target.checked; dirty = true; };
+setView(new URLSearchParams(location.search).get('variant') || 'angled');
+$('show-exterior').onchange = event => { if (restaurant) restaurant.exterior.visible = event.target.checked; model.street.enabled = Boolean(restaurant?.exterior.visible && restaurant?.animated); dirty = true; };
 $('settings').onclick = () => { $('settings-panel').hidden = !$('settings-panel').hidden; };
-$('animate').onchange = event => { if (restaurant) restaurant.animated = event.target.checked; dirty = true; };
+$('animate').onchange = event => { if (restaurant) restaurant.animated = event.target.checked; model.street.enabled = Boolean(restaurant?.exterior.visible && restaurant?.animated); dirty = true; };
 $('show-stats').onchange = event => { document.querySelector('.stats').hidden = !event.target.checked; };
 $('fullscreen').onclick = async () => {
   try {
@@ -120,14 +135,24 @@ $('fullscreen').onclick = async () => {
     else await document.documentElement.requestFullscreen();
   } catch { $('clock').textContent = '请使用窗口最大化查看'; }
 };
+for (const [id, key] of [['waiting-limit', 'waiting'], ['vehicle-limit', 'vehicles']]) {
+  $(id).oninput = event => { model.setLimits({ [key]: Number(event.target.value) }); dirty = true; ui(); };
+}
+document.addEventListener('fullscreenchange', () => {
+  document.body.classList.toggle('fullscreen-mode', Boolean(document.fullscreenElement));
+  dirty = true;
+});
 $('scene-settings').onclick = () => $('settings').click();
 $('scene-fullscreen').onclick = () => $('fullscreen').click();
 $('stage').onclick = event => {
+  const bubble = event.target.closest('[data-bug]');
+  if (bubble) { open('bug:' + bubble.dataset.bug); return; }
   if (event.target.closest('[data-filter]')) return;
   const hit = restaurant?.hit(event.clientX, event.clientY);
   if (hit !== null && hit !== undefined) open(hit);
 };
 $('stage').onpointermove = event => {
+  if (event.target.closest('[data-bug]')) return;
   const hit = restaurant?.hit(event.clientX, event.clientY);
   $('scene').style.cursor = hit === null || hit === undefined ? 'default' : 'pointer';
 };
@@ -148,6 +173,7 @@ function frame(now) {
 // Read-only state and deterministic Mock controls for local acceptance checks.
 globalThis.demo = {
   snapshot: () => model.snapshot(),
+  configure: values => { model.setLimits(values); $('waiting-limit').value = model.limits.waiting; $('vehicle-limit').value = model.limits.vehicles; dirty = true; ui(); },
   pause: () => { model.paused = true; dirty = true; ui(); },
   reset: () => { reset(); ui(); },
   advance: seconds => {
@@ -159,3 +185,5 @@ globalThis.demo = {
   info: () => ({ camera: restaurant?.cameraIndex, cameraPosition: restaurant?.camera.position.toArray(), cameraUp: restaurant?.camera.up.toArray(), renderer: restaurant?.renderer.info.render, animated: restaurant?.animated, exterior: restaurant?.exterior.visible, preview: document.body.classList.contains('preview') })
 };
 requestAnimationFrame(frame);
+
+if (restaurant) connectDesktop({model,restaurant,ui,setView,dirty:()=>{dirty=true;}}).catch(error=>console.error('原生界面初始化失败：',error));
